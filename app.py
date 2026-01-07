@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from faker import Faker
 import random
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 
 # CONFIGURAÇÃO INICIAL
 fake = Faker('pt_BR')
@@ -20,6 +20,7 @@ areas = {
     'Vendas': [],
     'Saúde': [],
     'RH': [],
+    'Fornecedores': [],
     'Logística': ['Transporte', 'Estoque', 'Distribuição'],
     'Financeiro': ['Contas a Pagar', 'Contas a Receber', 'Fluxo de Caixa'],
     'SLA de Atendimento': ['Suporte Técnico', 'Helpdesk', 'Manutenção']
@@ -91,27 +92,84 @@ def gerar_dados(area, qtd, subarea=None):
                 'Salário (R$)': round(random.uniform(2000, 15000), 2)
             })
 
+    # ÁREA: FORNECEDORES
+    elif area == 'Fornecedores':
+        categorias = ['Eletrônicos', 'Móveis', 'Material de Escritório', 'Alimentos', 'Limpeza']
+        for _ in range(qtd):
+            dados.append({
+                'Razão Social': fake.company(),
+                'Nome Fantasia': fake.company_suffix(),
+                'Endereço': fake.street_address(),
+                'Cidade': fake.city(),
+                'Bairro': fake.street_name(),
+                'Estado': fake.state_abbr(),
+                'CEP': fake.postcode(),
+                'CNPJ': fake.cnpj(),
+                'Numero de Contato': fake.phone_number(),
+                'Email de contato': fake.company_email()
+            })
+
 
     # ÁREA: LOGÍSTICA
     elif area == 'Logística':
         if subarea == 'Transporte':
             tipos_transporte = ['Rodoviário', 'Aéreo', 'Marítimo']
-            status = ['Em Trânsito', 'Entregue', 'Atrasado']
+            
+            # Frota fixa de 15 veículos com seus respectivos motoristas
+            frota = []
+            for _ in range(15):
+                # Gera nome completo sem títulos
+                nome_completo = f"{fake.first_name()} {fake.last_name()}"
+                placa = fake.license_plate()
+                frota.append({
+                    'motorista': nome_completo,
+                    'placa': placa
+                })
+            
+            # Data atual para comparação
+            data_atual = datetime.now().date()
+            
+            # Data inicial: 1º de março de 2025
+            data_inicio_minima = date(2025, 3, 1)
+            
             for _ in range(qtd):
-                data_inicio = fake.date_between(start_date='-1M', end_date='today')
-                # Garante que o término seja entre 1 e 10 dias após o início
-                dias_duracao = random.randint(1, 10)
+                # Data início a partir de março/2025
+                data_inicio = fake.date_between(start_date=data_inicio_minima, end_date='today')
+                
+                # Define a previsão de término (entre 1 e 10 dias após o início)
+                dias_previsao = random.randint(1, 10)
+                data_previsao_termino = data_inicio + timedelta(days=dias_previsao)
+                
+                # Define o término real, que pode ser antes ou depois da previsão
+                # 70% de chance de entregar no prazo ou antes, 30% de atrasar
+                if random.random() < 0.7:
+                    # Entrega no prazo ou antes
+                    dias_duracao = random.randint(1, dias_previsao)
+                else:
+                    # Entrega atrasada
+                    dias_duracao = random.randint(dias_previsao + 1, dias_previsao + 5)
+                
                 data_termino = data_inicio + timedelta(days=dias_duracao)
+                
+                # Se a data de término for no futuro, deixa em branco
+                if data_termino > data_atual:
+                    data_termino_display = None
+                else:
+                    data_termino_display = data_termino
+
+                # Seleciona um veículo da frota (motorista e placa juntos)
+                veiculo = random.choice(frota)
 
                 dados.append({
                     'Data Início': data_inicio,
-                    'Data Término': data_termino,
-                    'Motorista': fake.name(),
+                    'Previsão Término': data_previsao_termino,
+                    'Data Término': data_termino_display,
+                    'Motorista': veiculo['motorista'],
                     'Tipo Transporte': random.choice(tipos_transporte),
-                    'Placa Veículo': fake.license_plate(),
+                    'Placa Veículo': veiculo['placa'],
                     'Cidade Origem': fake.city(),
                     'Cidade Destino': fake.city(),
-                    'Status': random.choice(status)
+                    'Valor Mercadoria (R$)': round(random.uniform(1000, 50000), 2)
                 })
 
         elif subarea == 'Estoque':
@@ -214,7 +272,7 @@ def gerar_dados(area, qtd, subarea=None):
 
 # EXECUÇÃO E EXIBIÇÃO
 df = gerar_dados(area, qtd, subarea)
-st.dataframe(df, use_container_width=True)
+st.dataframe(df, use_container_width=True, height=600)
 
 # DOWNLOAD
 csv = df.to_csv(index=False, encoding='utf-8-sig')
